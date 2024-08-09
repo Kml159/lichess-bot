@@ -11,3 +11,6 @@ lichess_bot_auto_logs/*
 TEMP/*
 
 *.so
+notes.txt
+
+.*

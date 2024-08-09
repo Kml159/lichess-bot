@@ -9,7 +9,7 @@ import random
 from lib.engine_wrapper import MinimalEngine
 from lib.types import MOVE, HOMEMADE_ARGS_TYPE
 import logging
-
+from evaluation.search import search_best_move 
 
 # Use this logger variable to print messages to the console or log files.
 # logger.info("message") will always print "message" to the console or log file.
@@ -46,9 +46,9 @@ class MyEngine(MinimalEngine):
             ret = time_limit.white_clock
         elif board.turn == chess.BLACK and time_limit.black_clock != None:
             ret = time_limit.black_clock
-        return ret
+        return ret      
                 
-    def search(self, board: chess.Board, time_limit: Limit, *args: HOMEMADE_ARGS_TYPE) -> PlayResult:
+    def _search(self, board: chess.Board, time_limit: Limit, *args: HOMEMADE_ARGS_TYPE) -> PlayResult:
             
             # If time is running out, return a random move
             if self.get_my_time(board, time_limit) < 0.1:
@@ -113,3 +113,8 @@ class MyEngine(MinimalEngine):
             
             print("---> Returning random legal move")
             return PlayResult(random.choice(list(board.legal_moves)), None)
+        
+    def search(self, board: chess.Board, time_limit: Limit, *args: HOMEMADE_ARGS_TYPE) -> PlayResult:
+               
+        return PlayResult(search_best_move(board, self.get_my_time(board, time_limit)), None)
+        

@@ -251,6 +251,7 @@ int eval()
     int mgPhase = gamePhase;
     if (mgPhase > 24) mgPhase = 24; /* in case of early promotion */
     int egPhase = 24 - mgPhase;
+
     return (mgScore * mgPhase + egScore * egPhase) / 24;
 }
 
@@ -263,7 +264,15 @@ std::unordered_map<char, int> pieceMap = {
     {'K', WHITE_KING}, {'k', BLACK_KING},
 };
 
+bool isTurnWhite(const std::string &fen) {
+    return fen.find("w") != std::string::npos;
+}
+
 void fenToIntBoard(const std::string &fen) {
+
+    side2move = isTurnWhite(fen) ? WHITE : BLACK;
+    
+    // Set the board
     std::fill(board, board + 64, EMPTY); 
     int index = 0;
 
@@ -290,3 +299,64 @@ extern "C" {
 
     }
 }
+
+void printIntBoard() {
+    for (int i = 0; i < 64; i++) {
+        if (i % 8 == 0) {
+            std::cout << std::endl;
+        }
+        std::cout << board[i] << " ";
+    }
+    std::cout << std::endl;
+}
+
+void printCharBoard() {
+    for (int i = 0; i < 64; i++) {
+        if (i % 8 == 0) {
+            std::cout << std::endl;
+        }
+        switch (board[i]) {
+            case WHITE_PAWN:
+                std::cout << "P ";
+                break;
+            case BLACK_PAWN:
+                std::cout << "p ";
+                break;
+            case WHITE_KNIGHT:
+                std::cout << "N ";
+                break;
+            case BLACK_KNIGHT:
+                std::cout << "n ";
+                break;
+            case WHITE_BISHOP:
+                std::cout << "B ";
+                break;
+            case BLACK_BISHOP:
+                std::cout << "b ";
+                break;
+            case WHITE_ROOK:
+                std::cout << "R ";
+                break;
+            case BLACK_ROOK:
+                std::cout << "r ";
+                break;
+            case WHITE_QUEEN:
+                std::cout << "Q ";
+                break;
+            case BLACK_QUEEN:
+                std::cout << "q ";
+                break;
+            case WHITE_KING:
+                std::cout << "K ";
+                break;
+            case BLACK_KING:
+                std::cout << "k ";
+                break;
+            case EMPTY:
+                std::cout << ". ";
+                break;
+        }
+    }
+    std::cout << std::endl;
+}
+

@@ -14,3 +14,7 @@ TEMP/*
 notes.txt
 
 .*
+
+trash/
+/evaluation/venv
+evaluation/eval

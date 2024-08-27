@@ -18,7 +18,7 @@ def is_insufficient_material(fen_board: str) -> bool:
 
 def generate_legal_moves(fen_board: str) -> list:
     board = chess.Board(fen=fen_board)
-    return list(board.legal_moves)
+    return [move.uci() for move in board.legal_moves]
 
 def make_move(fen_board: str, move: str) -> str:
     board = chess.Board(fen=fen_board)

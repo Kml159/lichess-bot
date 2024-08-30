@@ -7,7 +7,6 @@ lichess_bot_auto_logs/*
 .vs/*
 *.pgn
 *.log
-*.txt
 TEMP/*
 
 *.so
@@ -18,3 +17,4 @@ notes.txt
 trash/
 /evaluation/venv
 evaluation/eval
+/evaluation/eval_engine/ST

@@ -5,6 +5,8 @@
 #include <string> 
 #include <unordered_map>
 
+namespace eval{
+
 // from https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function
 
 #define PAWN   0
@@ -40,6 +42,8 @@ extern "C" {
 
 void init_tables();
 int eval();
+
+bool isInitialized = false;
 
 #ifdef __cplusplus
 }
@@ -213,7 +217,7 @@ int gamephaseInc[12] = {0,0,1,1,1,1,2,2,4,4,0,0};
 int mg_table[12][64];
 int eg_table[12][64];
 
-void init_tables()
+void init_tables()  // take to compile time ??
 {
     int pc, p, sq;
     for (p = PAWN, pc = WHITE_PAWN; p <= KING; pc += 2, p++) {
@@ -224,6 +228,7 @@ void init_tables()
             eg_table[pc+1][sq] = eg_value[p] + eg_pesto_table[p][FLIP(sq)];
         }
     }
+    isInitialized = true;
 }
 
 int eval()
@@ -272,7 +277,7 @@ bool isTurnWhite(const std::string &fen) {
 
 void fenToIntBoard(const std::string &fen) {
 
-    side2move = isTurnWhite(fen) ? WHITE : BLACK;
+    // side2move = isTurnWhite(fen) ? WHITE : BLACK;
     
     // Set the board
     std::fill(board, board + 64, EMPTY); 
@@ -295,6 +300,7 @@ void fenToIntBoard(const std::string &fen) {
 
 int evaluateBoard(const std::string &fen) {
     
+    if(isInitialized == false){ init_tables(); }
     fenToIntBoard(fen);
     return eval();
 
@@ -358,4 +364,6 @@ void printCharBoard() {
         }
     }
     std::cout << std::endl;
+}
+
 }

@@ -25,3 +25,14 @@ def make_move(fen_board: str, move: str) -> str:
     board.push(chess.Move.from_uci(move))
     return board.fen()
 
+def is_game_over(fen_board: str) -> bool:
+    board = chess.Board(fen=fen_board)
+    return board.is_game_over()
+
+def is_fifty_moves(fen_board: str) -> bool:
+    board = chess.Board(fen=fen_board)
+    return board.is_fivefold_repetition()
+
+def is_draw(fen_board: str) -> bool:
+    board = chess.Board(fen=fen_board)
+    return board.is_stalemate() or board.is_insufficient_material() or board.is_seventyfive_moves()

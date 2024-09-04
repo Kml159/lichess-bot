@@ -10,8 +10,8 @@
 #include <ctime>
 #include <iomanip>
 #include <chrono>
+#include <algorithm>
 #include "eval.hpp"
-
 
 const char *D_INTERPRETER_PATH = std::getenv("D_INTERPRETER_PATH");
 const char *D_SOURCE_PATH = std::getenv("D_SOURCE_PATH");
@@ -289,22 +289,6 @@ namespace py
 
 namespace chess
 {
-
-    std::string getCurrentTimeStamp() {
-        auto t = std::time(nullptr);
-        auto tm = *std::localtime(&t);
-        std::ostringstream oss;
-        oss << std::put_time(&tm, "%d.%m.%Y_%H:%M:%S");
-        return oss.str();
-    }
-
-    const std::string timeStamp = getCurrentTimeStamp();
-    const int MAX_SEARCH_DEPTH = 4;
-
-    const int64_t WIN_SCORE = 1000000000;
-    const int64_t DRAW_SCORE = 0;
-    const int64_t LOST_SCORE = -1000000000;
-
     enum class Player{
         WHITE_PLAYER,
         BLACK_PLAYER
@@ -317,6 +301,20 @@ namespace chess
         DRAW
     };
 
+    std::string getCurrentTimeStamp() {
+        auto t = std::time(nullptr);
+        auto tm = *std::localtime(&t);
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%d.%m.%Y_%H:%M:%S");
+        return oss.str();
+    }
+    
+    const std::string timeStamp = getCurrentTimeStamp();
+    const int MAX_SEARCH_DEPTH = 3;
+    const int64_t WIN_SCORE = 1000000000;
+    const int64_t DRAW_SCORE = 0;
+    const int64_t LOST_SCORE = -1000000000;
+    bool stopSearch = false;
     Player player;
 
     int evaluate(const std::string &fenBoard){ 
@@ -330,6 +328,7 @@ namespace chess
 
     struct boardState{
         static int bsCounter;
+        static int64_t bestScoresForDepth[MAX_SEARCH_DEPTH] ; // index: depth, value score
 
         std::vector<std::string> legalMoves;
         std::vector<boardState*> subBoardStates;
@@ -339,22 +338,27 @@ namespace chess
         Player turn;
         boardState* parentBS;
         GameState gameState;
-        int64_t evaluationScore;
+        int64_t evaluationScore = -123456789;
         signed short depth = -1;
+        bool worthSearching = true;
 
-        boardState(const std::string &fenBoard, int depth, boardState* parentBS = nullptr){
+        boardState(const std::string &fenBoard, int depth, boardState* parentBS = nullptr, std::string moveMade = "NULL"){
             bsCounter++;
             // Initialize vars
             this->fenBoard = fenBoard;
             this->depth = depth;
             this->parentBS = parentBS;
+            this->prevMoveMade = moveMade;
             legalMoves = py::generateLegalMoves(fenBoard);
 
-            // Check turn
+            // Check turn and evaluate board state
             turn = py::isTurnWhite(fenBoard) ? Player::WHITE_PLAYER : Player::BLACK_PLAYER;
             if(depth == 0){ chess::player = turn; }
 
-            // Check board state
+            if(depth == MAX_SEARCH_DEPTH){
+                evaluationScore = evaluate(fenBoard);
+            }
+            
             if(legalMoves.empty()){
                 if(py::isCheckmate(fenBoard)){
                     evaluationScore = WIN_SCORE;
@@ -369,16 +373,13 @@ namespace chess
                     gameState = GameState::LOSE;
                 }
             }
-            evaluationScore = evaluate(fenBoard);
 
-            // *** Comment following line out in actual run ***
-            printToTextFile();
-            // ***
+            
         }
 
+
         boardState* makeMove(const std::string moveToMake){
-            boardState *newBS = new boardState(py::makeMove(fenBoard, moveToMake), this->depth + 1, this);
-            newBS->prevMoveMade = moveToMake;
+            boardState *newBS = new boardState(py::makeMove(fenBoard, moveToMake), this->depth + 1, this, moveToMake);
             subBoardStates.push_back(newBS);
             return newBS;
         }
@@ -389,7 +390,7 @@ namespace chess
             if (outFile.is_open()) {
                 // Add title line if the file is empty
                 if (outFile.tellp() == 0) {
-                    outFile << "ParentBoard\tFEN Board\tTurn\tGame State\tEvaluation Score\tDepth\n";
+                    outFile << "ParentBoard\tFEN Board\tTurn\tGame State\tEvaluation Score\tDepth\tMoveMade\n";
                 }
                 outFile << (parentBS ? "0x" + std::to_string(reinterpret_cast<uintptr_t>(parentBS)) : "0x0000000000") << "\t"
                         << "\"" << fenBoard << "\"" << "\t"
@@ -398,11 +399,17 @@ namespace chess
                             gameState == GameState::DRAW ? "DRAW" : 
                             gameState == GameState::LOSE ? "LOSE" : "ONGOING") << "\t"
                         << evaluationScore << "\t"
-                        << depth << "\n"; // Added depth here
+                        << depth << "\t"
+                        << prevMoveMade << "\n";
                 outFile.close();
             } else {
                 std::cerr << "Unable to open file" << std::endl;
             }
+        }
+
+        bool isBranchWorthSearching(){
+            throw std::runtime_error("Not implemented");
+            return 0;
         }
 
         bool isTurnMine(){ return turn == chess::player; }
@@ -416,9 +423,11 @@ namespace chess
 
     };
     
+    // Definitions for static variables
     int boardState::bsCounter = 0;
+    int64_t boardState::bestScoresForDepth[MAX_SEARCH_DEPTH] = { INT64_MIN };
 
-    void timeStampTextFile(std::chrono::system_clock::time_point begin, std::chrono::system_clock::time_point end) {
+    void stampTextFile(std::chrono::system_clock::time_point begin, std::chrono::system_clock::time_point end) {
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
         std::time_t begin_time_t = std::chrono::system_clock::to_time_t(begin);
         std::time_t end_time_t = std::chrono::system_clock::to_time_t(end);
@@ -431,77 +440,110 @@ namespace chess
                     << std::setw(6) << std::setfill('0') << (std::chrono::duration_cast<std::chrono::microseconds>(begin.time_since_epoch()).count() % 1000000) << "\n"
                     << "End Timestamp: " << std::put_time(&end_local_time, "%H:%M:%S") << "." 
                     << std::setw(6) << std::setfill('0') << (std::chrono::duration_cast<std::chrono::microseconds>(end.time_since_epoch()).count() % 1000000) << "\n"
-                    << "Duration: " << duration << " microseconds\n"
+                    << "Duration: " << (float)duration/1000000 << " second\n"
                     << "Board State Counter: " << boardState::bsCounter << "\n"
-                    << "Max Search Depth: " << MAX_SEARCH_DEPTH << "\n";
+                    << "Max Search Depth: " << MAX_SEARCH_DEPTH << "\n"
+                    << "Search Stopped Prematurely: " << (stopSearch ? "YES" : "NO") << "\n";
             outFile.close();
         } else {
             std::cerr << "Unable to open file" << std::endl;
         }
+        std::cout << "Duration: " << (float)duration/1000000 << " second\n";
+        std::cout << "Games Searched: " << boardState::bsCounter << "\n";
     }
     
-    void getBestMoveHelper(boardState* board){
 
-        if(board->depth == 4){ // If max depth reached then return current evaluation
-            return;
-        }
-        else if(board->gameState != GameState::ONGOING){ // Handle game ended
-            return;
+    struct blindSearch{
+
+        static void updateBestScoresForDepth(){
+            // Check my notebook
         }
 
-        if(board->isTurnMine()){ // If turn is mine then best move goes up
+        static void getBestMoveHelper(boardState* board){
+
+            if(board->gameState != GameState::ONGOING && board->depth == 1){ // If there move to win do it
+                stopSearch = true;
+                return;
+            } 
+            else if(stopSearch || board->depth == MAX_SEARCH_DEPTH){
+                return;
+            }
+
+            if(board->isTurnMine()){ // If turn is mine then best move goes up
+                int64_t bestScore = INT64_MIN;
+                for(int i=0; i < board->legalMoves.size(); i++){
+                    boardState* subBS = board->makeMove(board->legalMoves.at(i));
+                    getBestMoveHelper(subBS);
+
+                    if(bestScore < subBS->evaluationScore){
+                        bestScore = subBS->evaluationScore;
+                    }
+                }
+                board->evaluationScore = bestScore;
+            }
+            else{ // If opponent turn then best move for opponent goes up
+                int64_t worseScore = INT64_MIN;
+                for(int i=0; i < board->legalMoves.size(); i++){
+                    boardState* subBS = board->makeMove(board->legalMoves.at(i));
+                    getBestMoveHelper(subBS);
+
+                    if(worseScore > subBS->evaluationScore){
+                        worseScore = subBS->evaluationScore;
+                    }
+                }
+                board->evaluationScore = worseScore;
+            }
+
+            // *** Comment this in actual run
+            board->printToTextFile();
+            // ***
+            
+        }
+
+        static std::string getBestMove(std::string fenBoard){
+            bool stopSearch = false;
+            std::string bestMove = "NULL";
+            boardState* board = new boardState(fenBoard, 0);
+            getBestMoveHelper(board);
             int64_t bestScore = INT64_MIN;
-            for(int i=0; i < board->legalMoves.size(); i++){
-                boardState* subBS = board->makeMove(board->legalMoves.at(i));
-                getBestMoveHelper(subBS);
-
-                if(bestScore < subBS->evaluationScore){
-                    bestScore = subBS->evaluationScore;
+            for(int i=0; i < board->subBoardStates.size(); i++){
+                boardState* subBoard = board->subBoardStates.at(i);
+                if(bestScore < subBoard->evaluationScore){
+                    bestScore = subBoard->evaluationScore;
+                    bestMove = subBoard->prevMoveMade;
                 }
             }
-            board->evaluationScore = bestScore;
+            delete board;
+            std::cout << "\nBest Move Found: " << bestMove << "\n";
+            return bestMove;
         }
-        else{ // If opponent turn then avg goes up
-            int64_t averageScore = 0;
-            for(int i=0; i < board->legalMoves.size(); i++){
-                boardState* subBS = board->makeMove(board->legalMoves.at(i));
-                getBestMoveHelper(subBS);
-                averageScore += subBS->evaluationScore;
-            }
-            averageScore = averageScore / board->legalMoves.size();
-            board->evaluationScore = averageScore;
-        }
-        
+    
+    };
+    
+    std::chrono::time_point<std::chrono::system_clock> timeBegin;
+    std::chrono::time_point<std::chrono::system_clock> timeEnd;
+
+    void initialize(){
+        py::initializePython();
+        std::fill(boardState::bestScoresForDepth, boardState::bestScoresForDepth + MAX_SEARCH_DEPTH, INT64_MIN);
+        timeBegin = std::chrono::system_clock::now();
     }
 
-    std::string getBestMove(std::string fenBoard){
-        std::string bestMove = "NULL";
-        boardState* board = new boardState(fenBoard, 0);
-        getBestMoveHelper(board);
-        int64_t bestScore = INT64_MIN;
-        for(int i=0; i < board->subBoardStates.size(); i++){
-            boardState* subBoard = board->subBoardStates.at(i);
-            if(bestScore < subBoard->evaluationScore){
-                bestScore = subBoard->evaluationScore;
-                bestMove = subBoard->prevMoveMade;
-            }
-        }
-        delete board;
-        return bestMove;
+    void finalize(){
+        timeEnd = std::chrono::system_clock::now();
+        py::finalizePython();
+        stampTextFile(timeBegin, timeEnd);
     }
-   
+
 }
 
 int main(int argc, char *argv[])
 {
-    py::initializePython();
     
-    auto begin = std::chrono::system_clock::now(); // Current time before getBestMove call
-    chess::getBestMove("7k/R7/1R6/8/8/7K/8/8 w - - 3 26");
-    auto end = std::chrono::system_clock::now(); // Current time after getBestMove call
-
-    chess::timeStampTextFile(begin, end);
-
-    py::finalizePython();
+    chess::initialize();
+    chess::blindSearch::getBestMove("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    chess::finalize();
+    
+    
     return 0;
 }
